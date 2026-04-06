@@ -2,7 +2,7 @@
 
 > Ask anything about the future. Get instant AI-powered analysis backed by real prediction market data.
 
-**[Live Demo](https://polymarket-oracle.vercel.app)** · Built with [Polymarket](https://polymarket.com) + [Claude AI](https://anthropic.com)
+**[Live Demo](https://polymarket-oracle.vercel.app)** · Built with [Polymarket](https://polymarket.com) + [DeepSeek Chat](https://platform.deepseek.com)
 
 ---
 
@@ -28,18 +28,18 @@ Users type any question they're curious or worried about — travel safety, geop
 ### Prerequisites
 
 - Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com)
+- A [DeepSeek API key](https://platform.deepseek.com)
 
 ### Local development
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/polymarket-oracle
+git clone https://github.com/Tengfei-Ma13206/polymarket-oracle
 cd polymarket-oracle
 npm install
 
 # Set up environment
 cp .env.local.example .env.local
-# Edit .env.local and add your ANTHROPIC_API_KEY
+# Edit .env.local and add your DEEPSEEK_APIKEY
 
 npm run dev
 ```
@@ -50,14 +50,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### One-click deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/polymarket-oracle&env=ANTHROPIC_API_KEY&envDescription=Your%20Anthropic%20API%20key&envLink=https://console.anthropic.com)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Tengfei-Ma13206/polymarket-oracle&env=DEEPSEEK_APIKEY&envDescription=Your%20Anthropic%20API%20key&envLink=https://platform.deepseek.com)
 
 ### Manual deploy
 
 ```bash
 npm i -g vercel
 vercel
-# Set ANTHROPIC_API_KEY in Vercel dashboard → Settings → Environment Variables
+# Set DEEPSEEK_APIKEY in Vercel dashboard → Settings → Environment Variables
 ```
 
 ## Architecture
