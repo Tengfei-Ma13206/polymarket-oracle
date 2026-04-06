@@ -4,7 +4,8 @@
 import OpenAI from "openai";
 import type { PolymarketMarket, Verdict } from "./types";
 
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+// DeepSeek requires /v1 in the base URL when using the OpenAI SDK
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
 const DEEPSEEK_MODEL    = "deepseek-chat";
 
 const SYSTEM_PROMPT = `You are Polymarket Oracle — an AI analyst that interprets real prediction market data to answer user questions.
@@ -75,12 +76,28 @@ export function extractVerdict(text: string): Verdict {
   return "UNCERTAIN";
 }
 
-export function createAIClient(): OpenAI {
-  const apiKey = process.env.DEEPSEEK_APIKEY;
+export function getApiKey(): string {
+  // Accept both naming conventions — Vercel users sometimes type either
+  const apiKey =
+    process.env.DEEPSEEK_APIKEY ||
+    process.env.DEEPSEEK_API_KEY ||
+    process.env.DEEPSEEK_KEY;
+
   if (!apiKey) {
-    throw new Error("DEEPSEEK_APIKEY environment variable is not set");
+    throw new Error(
+      "DeepSeek API key not found. " +
+      "Please set the DEEPSEEK_APIKEY environment variable in your Vercel project settings " +
+      "(Dashboard → Project → Settings → Environment Variables)."
+    );
   }
-  return new OpenAI({ baseURL: DEEPSEEK_BASE_URL, apiKey });
+  return apiKey;
+}
+
+export function createAIClient(): OpenAI {
+  return new OpenAI({
+    baseURL: DEEPSEEK_BASE_URL,
+    apiKey:  getApiKey(),
+  });
 }
 
 export async function streamAnalysis(
@@ -91,18 +108,46 @@ export async function streamAnalysis(
 ): Promise<void> {
   const client      = createAIClient();
   const userMessage = buildUserMessage(question, markets);
+  let   fullText    = "";
 
-  let fullText = "";
+  let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+  try {
+    stream = await client.chat.completions.create({
+      model:      DEEPSEEK_MODEL,
+      stream:     true,
+      max_tokens: 700,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user",   content: userMessage   },
+      ],
+    });
+  } catch (err: unknown) {
+    const status  = (err as { status?: number }).status;
+    const message = (err as Error).message ?? "Unknown error";
 
-  const stream = await client.chat.completions.create({
-    model:  DEEPSEEK_MODEL,
-    stream: true,
-    max_tokens: 700,
-    messages: [
-      { role: "system",  content: SYSTEM_PROMPT },
-      { role: "user",    content: userMessage   },
-    ],
-  });
+    if (status === 401) {
+      throw new Error(
+        "DeepSeek API key is invalid or expired. " +
+        "Check the DEEPSEEK_APIKEY value in your Vercel environment variables."
+      );
+    }
+    if (status === 402) {
+      throw new Error(
+        "DeepSeek account has insufficient balance. " +
+        "Please top up at https://platform.deepseek.com"
+      );
+    }
+    if (status === 404) {
+      throw new Error(
+        `DeepSeek model "${DEEPSEEK_MODEL}" not found. ` +
+        "Make sure your DeepSeek account has access to this model."
+      );
+    }
+    if (status === 429) {
+      throw new Error("DeepSeek rate limit reached. Please try again in a moment.");
+    }
+    throw new Error(`DeepSeek API error (${status ?? "unknown"}): ${message}`);
+  }
 
   for await (const chunk of stream) {
     const token = chunk.choices[0]?.delta?.content ?? "";
