@@ -1,5 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+/**
+ * AI analysis using DeepSeek Chat (OpenAI-compatible API).
+ */
+import OpenAI from "openai";
 import type { PolymarketMarket, Verdict } from "./types";
+
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+const DEEPSEEK_MODEL    = "deepseek-chat";
 
 const SYSTEM_PROMPT = `You are Polymarket Oracle — an AI analyst that interprets real prediction market data to answer user questions.
 
@@ -25,16 +31,15 @@ VERDICT: BEARISH
 VERDICT: UNCERTAIN
 VERDICT: MIXED
 
-BULLISH = markets signal a positive/safe/favorable outcome for the user's situation
-BEARISH = markets signal a negative/risky/unfavorable outcome
+BULLISH   = markets signal a positive/safe/favorable outcome for the user's situation
+BEARISH   = markets signal a negative/risky/unfavorable outcome
 UNCERTAIN = insufficient signal or probabilities near 50/50
-MIXED = meaningful positive AND negative signals present`;
+MIXED     = meaningful positive AND negative signals present`;
 
 function formatMarkets(markets: PolymarketMarket[]): string {
   if (markets.length === 0) {
     return "No directly relevant Polymarket prediction markets were found for this question.";
   }
-
   return markets
     .map(
       (m, i) =>
@@ -49,11 +54,17 @@ export function buildUserMessage(question: string, markets: PolymarketMarket[]):
   const noMarkets = markets.length === 0;
   return `User question: "${question}"
 
-${noMarkets ? "No directly relevant prediction markets were found." : `Relevant prediction markets (${markets.length} found, sorted by relevance):\n\n${formatMarkets(markets)}`}
+${
+  noMarkets
+    ? "No directly relevant prediction markets were found."
+    : `Relevant prediction markets (${markets.length} found, sorted by relevance):\n\n${formatMarkets(markets)}`
+}
 
-${noMarkets
-  ? "Even without direct market evidence, provide the best analysis you can based on general knowledge of what prediction markets typically show for similar topics. Note that no specific markets were found."
-  : `Based on these ${markets.length} prediction market(s), analyze what the collective market wisdom says about the user's question. Reference specific probabilities in your analysis.`}
+${
+  noMarkets
+    ? "Even without direct market evidence, provide the best analysis you can. Note that no specific Polymarket markets were found."
+    : `Based on these ${markets.length} prediction market(s), analyze what the collective market wisdom says about the user's question. Reference specific probabilities in your analysis.`
+}
 
 End your response with VERDICT: [BULLISH|BEARISH|UNCERTAIN|MIXED]`;
 }
@@ -64,12 +75,12 @@ export function extractVerdict(text: string): Verdict {
   return "UNCERTAIN";
 }
 
-export function createAnthropicClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+export function createAIClient(): OpenAI {
+  const apiKey = process.env.DEEPSEEK_APIKEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY environment variable is not set");
+    throw new Error("DEEPSEEK_APIKEY environment variable is not set");
   }
-  return new Anthropic({ apiKey });
+  return new OpenAI({ baseURL: DEEPSEEK_BASE_URL, apiKey });
 }
 
 export async function streamAnalysis(
@@ -78,24 +89,24 @@ export async function streamAnalysis(
   onToken: (token: string) => Promise<void>,
   onComplete: (fullText: string) => Promise<void>
 ): Promise<void> {
-  const client     = createAnthropicClient();
+  const client      = createAIClient();
   const userMessage = buildUserMessage(question, markets);
 
   let fullText = "";
 
-  const stream = await client.messages.stream({
-    model:      "claude-sonnet-4-6",
-    max_tokens: 600,
-    system:     SYSTEM_PROMPT,
-    messages:   [{ role: "user", content: userMessage }],
+  const stream = await client.chat.completions.create({
+    model:  DEEPSEEK_MODEL,
+    stream: true,
+    max_tokens: 700,
+    messages: [
+      { role: "system",  content: SYSTEM_PROMPT },
+      { role: "user",    content: userMessage   },
+    ],
   });
 
-  for await (const event of stream) {
-    if (
-      event.type === "content_block_delta" &&
-      event.delta.type === "text_delta"
-    ) {
-      const token = event.delta.text;
+  for await (const chunk of stream) {
+    const token = chunk.choices[0]?.delta?.content ?? "";
+    if (token) {
       fullText += token;
       await onToken(token);
     }
